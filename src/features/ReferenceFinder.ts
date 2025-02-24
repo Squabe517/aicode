@@ -1,52 +1,47 @@
 import * as vscode from 'vscode';
 
-/**
- * Finds all references to a given symbol across the entire project.
- *
- * @param symbol - The symbol to search for.
- * @returns A list of locations where the symbol is referenced.
- */
 export const executeReferenceFinder = async (symbol: string): Promise<vscode.Location[]> => {
-  const references: vscode.Location[] = [];
-  const workspaceFiles = await vscode.workspace.findFiles('**/*.{ts,js,py,java,cpp,cs,go,rb}', '**/node_modules/**');
-
-  for (const file of workspaceFiles) {
-    const document = await vscode.workspace.openTextDocument(file);
-    const positions = await findSymbolPositions(document, symbol);
-
-    for (const position of positions) {
-      const foundReferences = await vscode.commands.executeCommand<vscode.Location[]>(
-        'vscode.executeReferenceProvider',
-        document.uri,
-        position
-      );
-
-      if (foundReferences) {
-        references.push(...foundReferences);
-      }
-    }
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('No active text editor found.');
+    return [];
   }
 
-  return references;
+  const position = editor.selection.active;
+  const document = editor.document;
+
+  // Directly use VS Code's reference finder (FASTER)
+  const references = await vscode.commands.executeCommand<vscode.Location[]>(
+    'vscode.executeReferenceProvider',
+    document.uri,
+    position
+  );
+
+  return references || [];
 };
 
 /**
- * Finds all positions of a given symbol within a document.
+ * Finds all implementations of the selected symbol.
  *
- * @param document - The VS Code document to search in.
- * @param symbol - The symbol to find.
- * @returns A list of positions where the symbol appears.
+ * @param symbol - The symbol to search for.
+ * @returns A list of locations where the symbol is implemented.
  */
-async function findSymbolPositions(document: vscode.TextDocument, symbol: string): Promise<vscode.Position[]> {
-  const positions: vscode.Position[] = [];
-  const text = document.getText();
-  const regex = new RegExp(`\\b${symbol}\\b`, 'g');
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    const position = document.positionAt(match.index);
-    positions.push(position);
+export const executeImplementationFinder = async (symbol: string): Promise<vscode.Location[]> => {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('No active text editor found.');
+    return [];
   }
 
-  return positions;
-}
+  const position = editor.selection.active;
+  const document = editor.document;
+
+  // Use VS Code's built-in implementation finder (FAST)
+  const implementations = await vscode.commands.executeCommand<vscode.Location[]>(
+    'vscode.executeImplementationProvider',
+    document.uri,
+    position
+  );
+
+  return implementations || [];
+};

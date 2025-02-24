@@ -40,40 +40,68 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const symbols = chatGPT.getSymbols(text);
 
-		const classDef = chatGPT.getContext(symbols);
 		console.log(symbols);
 	});
 
 	context.subscriptions.push(extractSymbols);
 
-	// register a command to find symbols based on highlighted text
 	const findReferences = vscode.commands.registerCommand('aicode.findReferences', async () => {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) {
 			vscode.window.showErrorMessage('No active text editor found.');
 			return;
 		}
-
+	
 		const selection = editor.selection;
-		const text = editor.document.getText(selection);
-
-		if (!text) {
+		const selectedText = editor.document.getText(selection).trim();
+	
+		if (!selectedText) {
 			vscode.window.showErrorMessage('No text selected.');
 			return;
 		}
-
-		const references = await executeReferenceFinder(text);
-		for (let reference of references) {
-			vscode.window.showInformationMessage(reference.uri.fsPath);
-		}
-		if (references.length === 0) {
-			vscode.window.showInformationMessage('No references found.');
-		} else {
-			vscode.window.showInformationMessage(`Found ${references.length} references.`);
+	
+		vscode.window.setStatusBarMessage(`Searching for references of "${selectedText}"...`, 5000);
+	
+		try {
+			// Use VS Code’s built-in reference finder (MUCH FASTER)
+			const position = selection.active;
+			const references = await vscode.commands.executeCommand<vscode.Location[]>(
+				'vscode.executeReferenceProvider',
+				editor.document.uri,
+				position
+			);
+	
+			if (!references || references.length === 0) {
+				vscode.window.showInformationMessage(`No references found for "${selectedText}".`);
+				return;
+			}
+	
+			// Format references for display
+			const referenceItems = references.map((ref) => ({
+				label: `📄 ${vscode.workspace.asRelativePath(ref.uri)}`,
+				description: `Line ${ref.range.start.line + 1}, Column ${ref.range.start.character + 1}`,
+				reference: ref,
+			}));
+	
+			// Show references in QuickPick for easy selection
+			const pickedReference = await vscode.window.showQuickPick(referenceItems, {
+				placeHolder: `Found ${references.length} references. Select one to open.`,
+			});
+	
+			if (pickedReference) {
+				await vscode.window.showTextDocument(pickedReference.reference.uri, {
+					selection: pickedReference.reference.range,
+					preview: true,
+				});
+			}
+		} catch (error: any) {
+			vscode.window.showErrorMessage(`Error finding references: ${error.message}`);
 		}
 	});
-
+	
+	// Add command to context subscriptions
 	context.subscriptions.push(findReferences);
+
 
 
 	// The command has been defined in the package.json file

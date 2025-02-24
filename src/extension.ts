@@ -3,7 +3,8 @@
 import * as vscode from 'vscode';
 import * as fs from "fs";
 import * as path from "path";
-
+import { ConfigManager } from "./features/ConfigManager";
+import { ChatGPT } from "./features/ChatGPT";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -14,22 +15,11 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "aicode" is now active!');
 
 
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-  
-  if (workspaceFolders && workspaceFolders.length > 0) {
-    const projectRoot = workspaceFolders[0].uri.fsPath;
-    const configPath = path.join(projectRoot, ".ai-code-config.json");
+	// Register the ConfigManager`
+	// const configManager = new ConfigManager(context);
 
-    if (fs.existsSync(configPath)) {
-      vscode.window.showInformationMessage("Project detected! Using .ai-code-config.json");
-      loadConfig(configPath);
-    } else {
-      vscode.window.showWarningMessage("No .ai-code-config.json found in the workspace.");
-    }
-  } else {
-    vscode.window.showErrorMessage("No workspace folder is open.");
-  }
-
+	// Register the ChatGPT class
+	const chatGPT = new ChatGPT(context);
 
 
 	// The command has been defined in the package.json file
@@ -44,15 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(disposable);
 }
 
-function loadConfig(configPath: string) {
-  try {
-    const rawConfig = fs.readFileSync(configPath, "utf8");
-    const config = JSON.parse(rawConfig);
-    vscode.window.showInformationMessage(`Loaded config: ${JSON.stringify(config)}`);
-  } catch (error) {
-    vscode.window.showErrorMessage("Failed to read config file.");
-  }
-}
+
 
 // This method is called when your extension is deactivated
 export function deactivate() {}

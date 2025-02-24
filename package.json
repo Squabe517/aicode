@@ -26,6 +26,14 @@
       {
         "command": "aicode.generateCode",
         "title": "Generate Code"
+      },
+      {
+        "command": "aicode.findReferences",
+        "title": "Find References"
+      },
+      {
+        "command": "aicode.extractSymbols",
+        "title": "Extract Symbols"
       }
     ]
   },
@@ -62,6 +70,7 @@
   },
   "dependencies": {
     "aicode": "file:",
-    "openai": "^4.85.4"
+    "openai": "^4.85.4",
+    "zod": "^3.24.2"
   }
 }

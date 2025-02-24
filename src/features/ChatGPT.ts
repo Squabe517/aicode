@@ -4,6 +4,8 @@ import { ConfigManager } from './ConfigManager';
 import { Config } from './Config';
 import * as path from 'path';
 import { executeReferenceFinder } from './ReferenceFinder';
+import { symbol, z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 
 /**
@@ -81,7 +83,7 @@ export class ChatGPT {
    *
    * @returns response
    */
-  public async generateCode(): Promise<void> {
+  public async generateCode(): Promise<any> {
     const config: Config = this.configManager.getConfig();
     const editor = vscode.window.activeTextEditor;
 
@@ -154,6 +156,132 @@ export class ChatGPT {
     }
   }
 
+  /**
+   * This function retrieves the symbols from the initial user comment.
+   *
+   * @param text
+   *
+   * @returns void
+   */
+  public async getSymbols(text: string): Promise<{ symbols: string[] }> {
+    const Symbols = z.object({
+        symbols: z.array(z.string()),
+    });
 
+    try {
+        const response = await this.openai.beta.chat.completions.parse({
+            model: "gpt-4o-2024-08-06", // Ensure model supports structured outputs
+            messages: [
+                {
+                    role: "user",
+                    content: `Extract only the referenced data types from docstrings, comments, and documentation while ignoring everything else.
+
+                    **Instructions**:
+                    - Scan the given text (which may contain docstrings, comments, or inline documentation) for type annotations.
+                    - Extract only the referenced symbol (the custom data type), ignoring:
+                        - Variable names
+                        - Descriptions
+                        - Function or method names
+                    - Ignore built-in types (e.g., int, str, float, bool, void).
+                    - Output a structured JSON list of extracted symbols.
+
+                    **Example Input (Python & C++)**:
+                    \`\`\`
+                    """
+                    Represents a transaction.
+
+                    Attributes:
+                        sender (User): The user sending funds.
+                        recipient (User): The user receiving funds.
+                        amount (float): The transaction amount.
+                        token (Token): The token being transferred.
+                    """
+                    class Transaction:
+                        pass
+
+                    /**
+                     * @param coin Token The digital token used in transactions.
+                     * @return TransactionReceipt The receipt of the transaction.
+                     */
+                    TransactionReceipt processTransaction(Token coin);
+                    \`\`\`
+
+                    **Expected JSON Output**:
+                    \`\`\`json
+                    {
+                      "symbols": ["User", "Token", "TransactionReceipt"]
+                    }
+                    \`\`\`
+
+                    **Input Text:**
+                    ${text}`,
+                },
+            ],
+            temperature: 0.3,
+            response_format: zodResponseFormat(Symbols, "symbols"),
+        });
+
+        if (response.choices[0].message.refusal) {
+            vscode.window.showWarningMessage("Model refused the request.");
+            return { symbols: [] };
+        }
+
+        return response.choices[0].message.parsed as { symbols: string[] };
+        
+    } catch (error) {
+        vscode.window.showErrorMessage(`ChatGPT API Error: ${error}`);
+        return { symbols: [] }; // Ensure function always returns a value
+    }
+  }
+
+  /**
+   * This function retrieves the class declarations from a list of symbols
+   * 
+   * @param symbols
+   * 
+   * @returns void
+   */
+  public async getContext(symbols: string[]): Promise<string> {
+    for (let symbol of symbols) {
+      let references = await executeReferenceFinder(symbol);
+      let filePaths = [];
+
+      for (let reference of references) {
+        filePaths.push(reference.uri.fsPath);
+      }
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: 'user',
+              content: `Given the following list of symbols, find the class declarations that contain each symbol.
+
+              Instructions for ChatGPT:
+
+                  Look for the class declarations in the provided files that contain the given symbols.
+                  If a symbol is part of a class declaration, return the full class definition.
+                  If a symbol is part of a method or attribute, return the class that contains it.
+                  If a symbol is part of a function, return the class that contains the function.
+                  Return only the extracted class declarations without any additional explanations.
+                    
+                  Symbols:
+                  ${symbols.join(", ")}`
+            },
+          ],
+          temperature: 0.3,
+        });
+
+        return response.choices[0]?.message?.content?.trim() || '';
+      } catch (error) {
+        vscode.window.showErrorMessage(`ChatGPT API Error: ${error}`);
+        return '';
+      }
+
+
+
+
+    }
+  }
   
 }
